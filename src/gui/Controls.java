@@ -60,16 +60,15 @@ public class Controls extends JFrame implements WiiDeviceDiscoveryListener,
 	JButton b4 = null;
 	Controller control = null;
 	Timer t;
-	public static double ANGLE_MIN=50;
-	public static double ANGLE_MAX=130;
-	public static double ENGINE_MIN=0;
-	public static double ENGINE_MAX=255;
-    public static double ANTITORQUE_MIN=-30;
-    public static double ANTITORQUE_MAX=30;
-    public double previous_roll_angle=0.5*(0.0+1)*(ANGLE_MAX-ANGLE_MIN)+ANGLE_MIN;
-    public double previous_pitch_angle=0.5*(0.0+1)*(ANGLE_MAX-ANGLE_MIN)+ANGLE_MIN;
-    public double previous_engine_power=0.5*(0.0+1)*(ENGINE_MAX-ENGINE_MIN)+ENGINE_MIN;
-    public double previous_tail_rotor_power=previous_engine_power;
+	double offset=0.0;
+	public static double ANGLE_MIN = 50;
+	public static double ANGLE_MAX = 130;
+	public static double ENGINE_MIN = 0;
+	public static double ENGINE_MAX = 255;
+	public static double ANTITORQUE_MIN = -30;
+	public static double ANTITORQUE_MAX = 30;
+	public boolean paused = true;
+
 	public Controls() {
 		super("Helicopter Control");
 		setBounds(50, 50, 1400, 800);
@@ -251,86 +250,152 @@ public class Controls extends JFrame implements WiiDeviceDiscoveryListener,
 
 	}
 
-	@Override
 	public void actionPerformed(ActionEvent arg0) {
-		// TODO Auto-generated method stub
-		double roll_angle=previous_roll_angle;
-		double pitch_angle=previous_pitch_angle;
-		double engine_power=previous_engine_power;
-		double tail_power=previous_tail_rotor_power;
-		if (arg0.getSource() == t) {
-			control.poll();
-			double roll_input=0.0;
-			double pitch_input=0.0;
-			double engine_power_input=0.0;
-			double tail_power_input=0.0;
-			Component components[] = control.getComponents();
-			for (Component temp : components) {
-				if (temp.getName().equals("z")){
-					roll_input=temp.getPollData();
-				}
-				if(temp.getName().equals("rz")){
-					pitch_input=-1.0*temp.getPollData();
-				}
-				if(temp.getName().equals("y")){
-					engine_power_input=-1.0*temp.getPollData();
-				}
-				if(temp.getName().equals("x")){
-					tail_power_input=temp.getPollData();
+		try {
+			if (remote != null) {
+				if (arg0.getSource() == t) {
+					control.poll();
+					Component components[] = control.getComponents();
+					double roll_input=0.0;
+					double pitch_input=0.0;
+					double engine_power_input=0.0;
+					double tail_power_input=0.0;
+					double roll_angle=0.0;
+					double pitch_angle=0.0;
+					double engine_power=0.0;
+					double tail_power=0.0;
+					boolean first=false;
+					for (Component component : components) {
+						if (component.getName().equals("Top")
+								&& component.getPollData() == 1.0 && (!paused)) {
+							 System.out.println("shutdown");
+							this.paused = true;
+							byte data1[] = new byte[1];
+							byte address[] = new byte[4];
+							address[0] = 0x04;
+							address[1] = (byte) 0xa4;
+							address[2] = 0x00;
+							address[3] = 0x01;
+							data1[0] = 0x09;
+							remote.writeData(address, data1);
+							first=false;
+						}
+						if (!paused) {
+							first=true;
+							if (component.getName().equals("z")) {
+								roll_input = component.getPollData();
+							}
+							if (component.getName().equals("rz")) {
+								pitch_input = -1.0 * component.getPollData();
+							}
+							if (component.getName().equals("y")) {
+								engine_power_input = -1.0* component.getPollData();
+							}
+							if (component.getName().equals("x")) {
+								tail_power_input = component.getPollData();
+							}
+						}
+						if (component.getName().equals("Thumb")
+								&& component.getPollData() == 1.0 && paused) {
+							 System.out.println("startup");
+							this.paused = false;
+							byte data1[] = new byte[1];
+							byte address[] = new byte[4];
+							address[0] = 0x04;
+							address[1] = (byte) 0xa4;
+							address[2] = 0x00;
+							address[3] = 0x01;
+							data1[0] = 0x08;
+							remote.writeData(address, data1);
+						}
+						if(component.getName().equals("Pinkie") && component.getPollData()==1.0 && (paused)){
+
+							offset-=2.0;
+						}
+						if(component.getName().equals("Top 2") && component.getPollData()==1.0 && (paused)){
+
+							offset+=2.0;
+						}
+					}
+					 if(first){
+						  roll_angle=0.5*(roll_input+1)*(ANGLE_MAX-ANGLE_MIN)+ANGLE_MIN;
+						  pitch_angle=0.5*(pitch_input+1)*(ANGLE_MAX-ANGLE_MIN)+ANGLE_MIN;
+						  engine_power=0.5*(engine_power_input+1)*(ENGINE_MAX-ENGINE_MIN)+ENGINE_MIN;
+						  tail_power=engine_power-(offset+(0.5*(tail_power_input+1)*(ANTITORQUE_MAX-ANTITORQUE_MIN)+ANTITORQUE_MIN));
+					      first=false;
+							byte data1[] = new byte[8];
+							byte address[] = new byte[4];
+							address[0] = 0x04;
+							address[1] = (byte) 0xa4;
+							address[2] = 0x00;
+							address[3] = 0x01;
+							data1[0] = 0x01;
+							data1[2] = 0x02;
+							data1[4] = 0x03;
+							data1[6] = 0x04;
+							int temp=(int)roll_angle;
+							data1[1] =(byte) (temp>127?temp-131:temp);
+							temp=(int)pitch_angle;
+							data1[3] = (byte) (temp>127?temp-131:temp);
+							temp=(int)engine_power;
+							data1[5] = (byte) (temp>127?temp-256:temp);
+							temp=(int)tail_power;
+							data1[7] = (byte) (temp>127?temp-256:temp);
+							remote.writeData(address, data1);
+					}
 				}
 
 			}
-			
-			roll_angle=0.5*(roll_input+1)*(ANGLE_MAX-ANGLE_MIN)+ANGLE_MIN;
-			pitch_angle=0.5*(pitch_input+1)*(ANGLE_MAX-ANGLE_MIN)+ANGLE_MIN;
-			engine_power=0.5*(engine_power_input+1)*(ENGINE_MAX-ENGINE_MIN)+ENGINE_MIN;
-			tail_power=engine_power-(0.5*(tail_power_input+1)*(ANTITORQUE_MAX-ANTITORQUE_MIN)+ANTITORQUE_MIN);
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 
-		if (remote == null) {
-			String s = event_trace.getText();
-			// event_trace.setText(s + "\n"
-			// + "no wiimote is presently connected to the pc");
-		} else {
-			    if(previous_roll_angle!=roll_angle || previous_pitch_angle!=pitch_angle || previous_engine_power!=engine_power){
-			    int temp=0;
-				byte data1[] = new byte[8];
-                data1[0]=0x01;
-                data1[2]=0x02;
-                data1[4]=0x03;
-                data1[6]=0x04;
-                temp=(int)roll_angle;
-                data1[1]=(byte) (temp>127?temp-131:temp);
-                temp=(int)pitch_angle;
-                data1[3]=(byte)(temp>127?temp-131:temp);
-                temp=(int)engine_power;
-                data1[5]=(byte)(temp>127?temp-256:temp);
-                temp=(int)tail_power;
-                data1[7]=(byte)(temp>127?temp-256:temp);
-                System.out.println("roll input "+data1[1]+" pitch input "+data1[3]+" engine power "+data1[5]);
-				byte address[] = new byte[4];
-				address[0] = 0x04;
-				address[1] = (byte) 0xa4;
-				address[2] = 0x00;
-				address[3] = 0x01;
-				try {
-					remote.writeData(address, data1);
-				} catch (IllegalArgumentException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-				previous_roll_angle=roll_angle;
-				previous_pitch_angle=pitch_angle;
-				previous_engine_power=engine_power;
-				previous_tail_rotor_power=tail_power;
-			    }
-		}
 	}
-
+	/*
+	 * public void actionPerformed(ActionEvent arg0) { // TODO Auto-generated
+	 * method stub double roll_angle=previous_roll_angle; double
+	 * pitch_angle=previous_pitch_angle; double
+	 * engine_power=previous_engine_power; double
+	 * tail_power=previous_tail_rotor_power; if (arg0.getSource() == t) {
+	 * control.poll(); double roll_input=0.0; double pitch_input=0.0; double
+	 * engine_power_input=0.0; double tail_power_input=0.0; Component
+	 * components[] = control.getComponents(); for (Component temp : components)
+	 * { if (temp.getName().equals("z")){ roll_input=temp.getPollData(); }
+	 * if(temp.getName().equals("rz")){ pitch_input=-1.0*temp.getPollData(); }
+	 * if(temp.getName().equals("y")){
+	 * engine_power_input=-1.0*temp.getPollData(); }
+	 * if(temp.getName().equals("x")){ tail_power_input=temp.getPollData(); }
+	 * 
+	 * }
+	 * 
+	 * roll_angle=0.5*(roll_input+1)*(ANGLE_MAX-ANGLE_MIN)+ANGLE_MIN;
+	 * pitch_angle=0.5*(pitch_input+1)*(ANGLE_MAX-ANGLE_MIN)+ANGLE_MIN;
+	 * engine_power
+	 * =0.5*(engine_power_input+1)*(ENGINE_MAX-ENGINE_MIN)+ENGINE_MIN;
+	 * tail_power
+	 * =engine_power-(0.5*(tail_power_input+1)*(ANTITORQUE_MAX-ANTITORQUE_MIN
+	 * )+ANTITORQUE_MIN); }
+	 * 
+	 * if (remote == null) { String s = event_trace.getText(); //
+	 * event_trace.setText(s + "\n" // +
+	 * "no wiimote is presently connected to the pc"); } else {
+	 * if(previous_roll_angle!=roll_angle || previous_pitch_angle!=pitch_angle
+	 * || previous_engine_power!=engine_power){ int temp=0; byte data1[] = new
+	 * byte[8]; data1[0]=0x01; data1[2]=0x02; data1[4]=0x03; data1[6]=0x04;
+	 * temp=(int)roll_angle; data1[1]=(byte) (temp>127?temp-131:temp);
+	 * temp=(int)pitch_angle; data1[3]=(byte)(temp>127?temp-131:temp);
+	 * temp=(int)engine_power; data1[5]=(byte)(temp>127?temp-256:temp);
+	 * temp=(int)tail_power; data1[7]=(byte)(temp>127?temp-256:temp);
+	 * System.out.
+	 * println("roll input "+data1[1]+" pitch input "+data1[3]+" engine power "
+	 * +data1[5]); byte address[] = new byte[4]; address[0] = 0x04; address[1] =
+	 * (byte) 0xa4; address[2] = 0x00; address[3] = 0x01; try {
+	 * remote.writeData(address, data1); } catch (IllegalArgumentException e) {
+	 * // TODO Auto-generated catch block e.printStackTrace(); } catch
+	 * (IOException e) { // TODO Auto-generated catch block e.printStackTrace();
+	 * } catch (InterruptedException e) { // TODO Auto-generated catch block
+	 * e.printStackTrace(); } previous_roll_angle=roll_angle;
+	 * previous_pitch_angle=pitch_angle; previous_engine_power=engine_power;
+	 * previous_tail_rotor_power=tail_power; } } }
+	 */
 }
