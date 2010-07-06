@@ -321,7 +321,7 @@ public class Controls extends JFrame implements WiiDeviceDiscoveryListener,
 						  roll_angle=0.5*(roll_input+1)*(ANGLE_MAX-ANGLE_MIN)+ANGLE_MIN;
 						  pitch_angle=0.5*(pitch_input+1)*(ANGLE_MAX-ANGLE_MIN)+ANGLE_MIN;
 						  engine_power=0.5*(engine_power_input+1)*(ENGINE_MAX-ENGINE_MIN)+ENGINE_MIN;
-						  tail_power=engine_power-(offset+(0.5*(tail_power_input+1)*(ANTITORQUE_MAX-ANTITORQUE_MIN)+ANTITORQUE_MIN));
+						  tail_power=engine_power+offset-(0.5*(tail_power_input+1)*(ANTITORQUE_MAX-ANTITORQUE_MIN)+ANTITORQUE_MIN);
 					      first=false;
 							byte data1[] = new byte[8];
 							byte address[] = new byte[4];
